@@ -8,6 +8,7 @@ using NAudio.Wave;
 using Repo;
 using System.Configuration;
 using Logger;
+using System.Security.Cryptography;
 
 namespace Utility.FileOps
 {
@@ -27,10 +28,17 @@ namespace Utility.FileOps
         {
 
             if (Directory.Exists(sourceDirectoryPath))
-            {               
+            {
+               
                 string[] sourceFiles = Directory.GetFiles(sourceDirectoryPath);
 
-                foreach (string sourceFilePath in sourceFiles)
+                // Filter only .mp3 and .wav files
+                string[] filteredFiles = sourceFiles.Where(file =>
+                    Path.GetExtension(file).Equals(".mp3", StringComparison.OrdinalIgnoreCase) ||
+                    Path.GetExtension(file).Equals(".wav", StringComparison.OrdinalIgnoreCase)).ToArray();
+
+
+                foreach (string sourceFilePath in filteredFiles)
                 {
                     string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(sourceFilePath);
                     string newFolderPath = Path.Combine(destinationFolderPath, fileNameWithoutExtension);
@@ -47,12 +55,22 @@ namespace Utility.FileOps
                     ConvertMp3ToWavIfNecessary(newFolderPath, targetFormat);
 
                     var wavFile = (Path.GetFileName(sourceFilePath)).Replace("mp3", "wav");
-                    
-                    audioTransRepository.InsertAudioTranscribe(clientId, (int)JobStatus.PreProcessing,(int)FileType.wav, wavFile, sourceFilePath, null, null, null);
+
+                    //Get the details of Organization and Case
+                    Dictionary<string, string> components = audioTransRepository.GetFileNameComponents(clientId, wavFile);
+
+                    // Using the function to safely get values from the dictionary
+                    string agentId = GetValueFromDictionarySafely("AgentID", components);
+                    string caseId = GetValueFromDictionarySafely("CaseID", components);
+                    string discussionType = GetValueFromDictionarySafely("DiscussionType", components);
+                    string date = GetValueFromDictionarySafely("Date", components); 
+                    string uniqueKey = GetValueFromDictionarySafely("UniqueKey", components); 
+
+                    //Insert the details in the database
+                    audioTransRepository.InsertAudioTranscribe(clientId, (int)JobStatus.PreProcessing,(int)FileType.wav, wavFile, sourceFilePath, null, null, null, agentId,caseId,false,0,true,false);
 
                     TimeSpan duration;
                     string WavDestFilePath = Path.Combine(newFolderPath, Path.GetFileName(fileNameWithoutExtension+".wav"));
-
 
                     // Check if file size exceeds 5 MB and chunk if necessary                   
                     try
@@ -256,6 +274,14 @@ namespace Utility.FileOps
             }
         }
 
+        public static string GetValueFromDictionarySafely(string key, Dictionary<string, string> dictionary)
+        {
+            if (dictionary.TryGetValue(key, out var value))
+            {
+                return value ?? ""; // If value is found but is null, return an empty string instead
+            }
+            return ""; // Return an empty string if the key is not found in the dictionary
+        }
 
     }
 }

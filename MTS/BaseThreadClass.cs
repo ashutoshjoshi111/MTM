@@ -7,6 +7,7 @@ using System.Collections.Concurrent;
 using Repo;
 using ClientWrapper;
 using System.Net.Http;
+using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
 
 #endregion
 
@@ -47,7 +48,6 @@ namespace MTS
         AudioTranscribeTrackerRepository audioTranscribeTrackerRepository = new AudioTranscribeTrackerRepository();
 
         #endregion
-
 
         /// <summary>
         /// Makes threads and executes.
@@ -94,9 +94,12 @@ namespace MTS
 
                         for (int i = 0; (i <= numberOfThreads - 1) & (i <= maxNumberOfThreads) & (currentThreadCount < maxNumberOfThreads); i++)
                         {
-                            objLogger.LogItem(" System Putting job Id= " + ds.Tables[0].Rows[i]["Id"].ToString() + " into Thread Pool.", "BaseThreadClass", "runThread");
 
-                            objJobid = ds.Tables[0].Rows[i]["Id"].ToString();
+                            string jobid = ds.Tables[0].Rows[i]["Id"].ToString();
+
+                            objLogger.LogItem(" System Putting job Id= " + jobid + " into Thread Pool.", "BaseThreadClass", "runThread");
+
+                            objJobid = jobid;
 
                             lock (lstObjLock) // Lock lstObjInQueue to prevent concurrent modifications
                             {
@@ -110,7 +113,7 @@ namespace MTS
                                         break;
                                     }
 
-                                    ThreadPool.QueueUserWorkItem(callBack, (object)ds.Tables[0].Rows[i]["Id"].ToString());
+                                    ThreadPool.QueueUserWorkItem(callBack, (object)jobid);
 
                                      lstObjInQueue.Add(objJobid);                                    
 
@@ -208,7 +211,27 @@ namespace MTS
             //ManagementObject processor = new ManagementObject("Win32_PerfFormattedData_PerfOS_Processor.Name='_Total'");
             //processor.Get();
             //return double.Parse(processor.Properties["PercentProcessorTime"].Value.ToString());
-            return 50.77;
+            
+            //string command = "Get-WmiObject Win32_Processor | Measure-Object -Property LoadPercentage -Average | Select Average";
+
+            //var process = new Process
+            //{
+            //    StartInfo = new ProcessStartInfo
+            //    {
+            //        FileName = "powershell",
+            //        Arguments = $"-Command \"{command}\"",
+            //        RedirectStandardOutput = true,
+            //        UseShellExecute = false,
+            //        CreateNoWindow = true,
+            //    }
+            //};
+
+            //process.Start();
+            //string output = process.StandardOutput.ReadToEnd();
+            //process.WaitForExit();
+
+
+            return 10.77;
         }
 
         public void Run(string JobID)
@@ -216,7 +239,6 @@ namespace MTS
             try
             { 
                 objLogger.LogItem("Begining of Run job with id is ="+JobID+"  date and time is "+DateTime.Now.ToString(), "BaseThreadClass", "Run");
-
                 
 
                 Task.Run(async () => await TranscriptionVoiceFileAsync(JobID));               

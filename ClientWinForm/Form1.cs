@@ -87,54 +87,56 @@ namespace ClientWinForm
             string audioFilePath = "C:\\Ashutosh Joshi\\ChatGPT - bkp\\ChatGPT\\ChatGPT\\ChatGPT\\mthreadflask\\Recording\\DMV-85311-MU11_Chunk_6.wav"; // Provide the path to your audio file
                                                                                                                                                         //string transcript =  TranscribeAudio(audioFilePath).Result;
 
+            string mp3FilePath = "C:\\AICogent\\ICFiles"; // Path to the input MP3 file
+            string wavFilePath = "C:\\AICogent\\ICFiles\\Chunk"; // Path to the output WAV file
+
+            FileManagement fileOpx = new FileManagement();
+            fileOpx.CopyFilesToNewFolders(mp3FilePath, wavFilePath);
+
+
+
             //string transcript = TranscribeAudio(audioFilePath).Result;
-            //string transcript = WhisperTranscribeAudio(audioFilePath).Result;
 
 
-            Task.Run(async () => await PerformHttpRequest());
+            //Task.Run(async () => await PerformHttpRequest());
 
-/*
-            using (ApiClient apiConsumer = new ApiClient(baseUrl))
-            {
-                apiConsumer.Get(baseUrl, ("clientid", "1"), ("id", "222"));
-                //apiConsumer.Get(baseUrl, ("audio_file", "DMV-85311-MU11.wav"), ("clientid", "1"));
-                //firstResponse = apiConsumer.Get(baseUrl, ("audio_file", "DMV-85311-MU11.wav"), ("clientid", "1"));
-            }
-
-
-            using (ApiClient apiConsumer = new ApiClient(baseUrl))
-            {
-                //apiConsumer.Get(baseUrl, ("clientid", "1"), ("id", "222"));
-                //apiConsumer.Get(baseUrl, ("audio_file", "DMV-85311-MU11.wav"), ("clientid", "1"));
-                firstResponse = apiConsumer.Get(baseUrl, ("audio_file", "DMV-85311-MU11.wav"), ("clientid", "1"));
-            }
-
-            ////string mp3FilePath = "C:\\AICogent\\ICFiles"; // Path to the input MP3 file
-            ////string wavFilePath = "C:\\AICogent\\ICFiles\\Chunk"; // Path to the output WAV file
-
-            ////FileManagement fileOpx = new FileManagement();
-            ////fileOpx.CopyFilesToNewFolders(mp3FilePath, wavFilePath);
-
-            ////var targetFormat = new NAudio.Wave.WaveFormat(16000, 16, 1); // Example: 16 kHz sample rate, 16-bit depth, mono
-            ////var converter = new voiceFileOps();
+            /*
+                        using (ApiClient apiConsumer = new ApiClient(baseUrl))
+                        {
+                            apiConsumer.Get(baseUrl, ("clientid", "1"), ("id", "222"));
+                            //apiConsumer.Get(baseUrl, ("audio_file", "DMV-85311-MU11.wav"), ("clientid", "1"));
+                            //firstResponse = apiConsumer.Get(baseUrl, ("audio_file", "DMV-85311-MU11.wav"), ("clientid", "1"));
+                        }
 
 
-            //converter.ConvertMp3ToWav(mp3FilePath, wavFilePath, targetFormat);
+                        using (ApiClient apiConsumer = new ApiClient(baseUrl))
+                        {
+                            //apiConsumer.Get(baseUrl, ("clientid", "1"), ("id", "222"));
+                            //apiConsumer.Get(baseUrl, ("audio_file", "DMV-85311-MU11.wav"), ("clientid", "1"));
+                            firstResponse = apiConsumer.Get(baseUrl, ("audio_file", "DMV-85311-MU11.wav"), ("clientid", "1"));
+                        }
+
+                       
+                        ////var targetFormat = new NAudio.Wave.WaveFormat(16000, 16, 1); // Example: 16 kHz sample rate, 16-bit depth, mono
+                        ////var converter = new voiceFileOps();
 
 
-            int numberOfThreads = 1; // You can configure the number of threads here
-            for (int i = 0; i < numberOfThreads; i++)
-            {
-                Thread thread = new Thread(() =>
-                {
-                    BaseThreadClass obj = new BaseThreadClass();
-                    obj.runThread();
-                });
-                thread.Start();
-            }
-  */
+                        //converter.ConvertMp3ToWav(mp3FilePath, wavFilePath, targetFormat);
 
-            }
+
+                        int numberOfThreads = 1; // You can configure the number of threads here
+                        for (int i = 0; i < numberOfThreads; i++)
+                        {
+                            Thread thread = new Thread(() =>
+                            {
+                                BaseThreadClass obj = new BaseThreadClass();
+                                obj.runThread();
+                            });
+                            thread.Start();
+                        }
+              */
+
+        }
 
         private void Form1_Load(object sender, EventArgs e)
         {

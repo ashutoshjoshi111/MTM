@@ -19,22 +19,42 @@ namespace Repo
             dbContext = new DatabaseContext();
         }
 
-        public void InsertAudioTranscribe(int clientId, int jobStatus, int fileType, string audioFileName = null,
-            string transcribeFilePath = null, DateTime? transcribeStartTime = null, DateTime? transcribeEndTime = null, DateTime? transcribeDate = null)
+        public void InsertAudioTranscribe(
+    int clientId,
+    int jobStatus,
+    int fileType,
+    string audioFileName = null,
+    string transcribeFilePath = null,
+    DateTime? transcribeStartTime = null,
+    DateTime? transcribeEndTime = null,
+    DateTime? transcribeDate = null,
+    string agentID = null, // New parameter
+    string caseID = null, // New parameter
+    bool? saDone = null, // New parameter
+    int retry = 0, // New parameter with a default value
+    bool isActive = true, // New parameter with a default value
+    bool isDeleted = false // New parameter with a default value
+)
         {
             List<SqlParameter> parameters = new List<SqlParameter>
-        {
-            new SqlParameter("@ClientId", clientId),
-            new SqlParameter("@JobStatus", jobStatus),
-            new SqlParameter("@FileType", fileType),
-            new SqlParameter("@AudioFileName", audioFileName !=null ? (object)audioFileName : DBNull.Value),
-            new SqlParameter("@TranscribeFilePath", transcribeFilePath != null ? (object)transcribeFilePath : DBNull.Value),
-            new SqlParameter("@TranscribeStartTime", transcribeStartTime.HasValue ? (object)transcribeStartTime.Value : DBNull.Value),
-            new SqlParameter("@TranscribeEndTime", transcribeEndTime.HasValue ? (object)transcribeEndTime.Value : DBNull.Value),
-            new SqlParameter("@TranscribeDate", transcribeDate.HasValue ? (object)transcribeDate.Value : DBNull.Value)
-        };
+            {
+                new SqlParameter("@ClientId", clientId),
+                new SqlParameter("@JobStatus", jobStatus),
+                new SqlParameter("@FileType", fileType),
+                new SqlParameter("@AudioFileName", audioFileName != null ? (object)audioFileName : DBNull.Value),
+                new SqlParameter("@TranscribeFilePath", transcribeFilePath != null ? (object)transcribeFilePath : DBNull.Value),
+                new SqlParameter("@TranscribeStartTime", transcribeStartTime.HasValue ? (object)transcribeStartTime.Value : DBNull.Value),
+                new SqlParameter("@TranscribeEndTime", transcribeEndTime.HasValue ? (object)transcribeEndTime.Value : DBNull.Value),
+                new SqlParameter("@TranscribeDate", transcribeDate.HasValue ? (object)transcribeDate.Value : DBNull.Value),
+                new SqlParameter("@AgentID", agentID != null ? (object)agentID : DBNull.Value), 
+                new SqlParameter("@CaseID", caseID != null ? (object)caseID : DBNull.Value), 
+                new SqlParameter("@SADone", saDone.HasValue ? (object)saDone.Value : DBNull.Value), 
+                new SqlParameter("@Retry", retry), 
+                new SqlParameter("@IsActive", isActive), 
+                new SqlParameter("@IsDeleted", isDeleted) 
+            };
 
-             dbContext.ExecuteScalarStoredProcedure("InsertAudioTranscribe", parameters.ToArray());
+            dbContext.ExecuteScalarStoredProcedure("InsertAudioTranscribe", parameters.ToArray());
         }
 
         public void UpdateAudioTranscribeByFileName(int? clientId, int? jobStatus, int? fileType, string audioFileName,
@@ -120,6 +140,31 @@ namespace Repo
 
             // Call the stored procedure
             dbContext.ExecuteStoredProcedure("UpdateSADoneById", parameters);
+        }
+
+        public Dictionary<string, string> GetFileNameComponents(int orgId, string fileName)
+        {
+            List<SqlParameter> parameters = new List<SqlParameter>
+            {
+                new SqlParameter("@OrgID", orgId),
+                new SqlParameter("@FileName", fileName)
+            };
+
+            DataTable resultTable = dbContext.ExecuteStoredProcedure("GetFileNameComponents", parameters.ToArray());
+
+            Dictionary<string, string> fileComponents = new Dictionary<string, string>();
+
+            foreach (DataRow row in resultTable.Rows)
+            {
+                string componentName = Convert.ToString(row["ComponentName"]);
+                string componentValue = Convert.ToString(row["Component"]);
+                if (!string.IsNullOrWhiteSpace(componentName))
+                {
+                    fileComponents.Add(componentName, componentValue);
+                }
+            }
+
+            return fileComponents;
         }
 
     }
