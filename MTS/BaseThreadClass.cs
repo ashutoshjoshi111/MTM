@@ -7,6 +7,8 @@ using System.Collections.Concurrent;
 using Repo;
 using ClientWrapper;
 using System.Net.Http;
+using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
+using System.Globalization;
 
 #endregion
 
@@ -48,19 +50,26 @@ namespace MTS
 
         #endregion
 
-
         /// <summary>
         /// Makes threads and executes.
         /// </summary>
         public void runThread()
         {
             try
-            {                
-
+            {
+                
                 objLogger.LogItem("Trying to check  Thread Pool.", "BaseThreadClass", "runThread");
 
                 int CpuUtilizationLimit = 0;
                 CpuUtilizationLimit = Convert.ToInt16(ConfigurationManager.AppSettings["CpuUtilizationLimit"]);
+
+                //Checking CPU Utilization
+                if (Convert.ToInt16(getCPUUsage()) > CpuUtilizationLimit)
+                {
+                    objLogger.LogItem(" CPU utilization Alert!!!!!!!!!!!!!!!!!!!!! Current CPU Usages is exceeding " + CpuUtilizationLimit.ToString() + "%. New Threads could not start. ", "BaseThreadClass", "runThread");
+                    Thread.Sleep(5);
+                    return;
+                }
 
 
                 if ((currentThreadCount >= maxNumberOfThreads) & (flagThreads))
@@ -94,23 +103,20 @@ namespace MTS
 
                         for (int i = 0; (i <= numberOfThreads - 1) & (i <= maxNumberOfThreads) & (currentThreadCount < maxNumberOfThreads); i++)
                         {
-                            objLogger.LogItem(" System Putting job Id= " + ds.Tables[0].Rows[i]["Id"].ToString() + " into Thread Pool.", "BaseThreadClass", "runThread");
 
-                            objJobid = ds.Tables[0].Rows[i]["Id"].ToString();
+                            string jobid = ds.Tables[0].Rows[i]["Id"].ToString();
+
+                            objLogger.LogItem(" System Putting job Id= " + jobid + " into Thread Pool.", "BaseThreadClass", "runThread");
+
+                            objJobid = jobid;
 
                             lock (lstObjLock) // Lock lstObjInQueue to prevent concurrent modifications
                             {
                                 
                                 if (objJobid != null && !lstObjInQueue.Contains(objJobid))
                                 {
-                                    //Checking CPU Utilization
-                                    if (Convert.ToInt16(getCPUUsage()) > CpuUtilizationLimit)
-                                    {
-                                        objLogger.LogItem(" CPU utilization Alert!!!!!!! Current CPU Usages is exceeding " + CpuUtilizationLimit.ToString() + "%. New Threads could not start. ", "BaseThreadClass", "runThread");
-                                        break;
-                                    }
-
-                                    ThreadPool.QueueUserWorkItem(callBack, (object)ds.Tables[0].Rows[i]["Id"].ToString());
+                                   
+                                    ThreadPool.QueueUserWorkItem(callBack, (object)jobid);
 
                                      lstObjInQueue.Add(objJobid);                                    
 
@@ -201,22 +207,72 @@ namespace MTS
         /// <summary>
         /// Gives details of current CPU utilization.
         /// </summary>
-        /// <returns>double</returns>
-        private double getCPUUsage()
+        /// <returns>float</returns>
+        private float getCPUUsage()
         {
 
-            //ManagementObject processor = new ManagementObject("Win32_PerfFormattedData_PerfOS_Processor.Name='_Total'");
-            //processor.Get();
-            //return double.Parse(processor.Properties["PercentProcessorTime"].Value.ToString());
-            return 50.77;
+            string command = @"typeperf ""\Processor(_Total)\% Processor Time"" -sc 1";
+            string output = ExecuteCommand(command);
+            float cpuUsage = ParseCpuUsage(output);
+
+            objLogger.LogItem("CPU % count is =" + cpuUsage.ToString() + ".", "BaseThreadClass", "runThread");
+            Console.WriteLine($"CPU Usage: {cpuUsage}%");
+
+            return cpuUsage;
         }
+
+        private static string ExecuteCommand(string command)
+        {
+            var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = $"/c {command}",
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                }
+            };
+
+            process.Start();
+            string output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit();
+            return output;
+        }
+
+        private static float ParseCpuUsage(string output)
+        {
+            // Split the output into lines.
+            string[] lines = output.Split('\n');
+
+            // The CPU usage value is expected on the second line (index 1) after the header.
+            if (lines.Length > 1)
+            {
+                string dataLine = lines[2]; // Get the second line where the data resides.
+                string[] parts = dataLine.Split(',');
+
+                if (parts.Length > 1) // Ensure there's at least two elements (date and value)
+                {
+                    string cpuUsageString = parts[1].Trim('"'); // Trim quotes if present around the CPU usage value.
+                    cpuUsageString = cpuUsageString.Replace(@"""", "");
+
+                    if (float.TryParse(cpuUsageString, NumberStyles.Any, CultureInfo.InvariantCulture, out float cpuUsage))
+                    {
+                        return cpuUsage;
+                    }
+                }
+            }
+
+            return -1; // Return -1 if parsing fails.
+        }
+
 
         public void Run(string JobID)
         {
             try
             { 
                 objLogger.LogItem("Begining of Run job with id is ="+JobID+"  date and time is "+DateTime.Now.ToString(), "BaseThreadClass", "Run");
-
                 
 
                 Task.Run(async () => await TranscriptionVoiceFileAsync(JobID));               
@@ -244,34 +300,67 @@ namespace MTS
         private async Task TranscriptionVoiceFileAsync(string JobID)
         {
             string response="";
+            //try
+            //{  
+            //    using (ApiClient apiConsumer = new ApiClient(transcriptionAudioURL))
+            //    {
+            //        audioTranscribeTrackerRepository.IncreaseRetryCountAudioTranscribeTracker(Convert.ToInt32(JobID));
+            //        response = await apiConsumer.GetAsync(transcriptionAudioURL, ("clientid", clientId.ToString()), ("id", JobID));
+            //        objLogger.LogItem(" Reponse from transcript is = "+response.ToString()+ " date and time is "+DateTime.Now.ToString(), "BaseThreadClass", "TranscriptionVoiceFileAsync");
+            //    }
+            //}
+            //catch (Exception ex)
+            //{
+            //    objLogger.LogItem("Exception is caught in TranscriptionVoiceFileAsync method for JobID = "+JobID+ " Exception details are "+ex.Message.ToString() +" date and time is "+DateTime.Now.ToString(), "BaseThreadClass", "TranscriptionVoiceFileAsync");
+            //    audioTranscribeTrackerRepository.UpdateAudioTranscribeTracker(Convert.ToInt32(JobID), clientId, null, (int)JobStatus.PreProcessing, null, null, null, null, null, null, null, null);
+            //}
+
+
             try
-            {  
+            {
                 using (ApiClient apiConsumer = new ApiClient(transcriptionAudioURL))
                 {
+                    audioTranscribeTrackerRepository.UpdateAudioTranscribeTracker(Convert.ToInt32(JobID), clientId, null, (int)JobStatus.Processing, null, null, null, null, null, null, null, null);
+
                     audioTranscribeTrackerRepository.IncreaseRetryCountAudioTranscribeTracker(Convert.ToInt32(JobID));
-                    response = await apiConsumer.GetAsync(transcriptionAudioURL, ("clientid", clientId.ToString()), ("id", JobID));
-                    objLogger.LogItem(" Reponse from transcript is = "+response.ToString()+ " date and time is "+DateTime.Now.ToString(), "BaseThreadClass", "TranscriptionVoiceFileAsync");
+
+                    HttpResponseMessage httpResponse = await apiConsumer.GetAsyncHttpResponse(transcriptionAudioURL, ("clientid", clientId.ToString()), ("id", JobID));
+
+                     response = await httpResponse.Content.ReadAsStringAsync();
+
+                    if (httpResponse.IsSuccessStatusCode)
+                    {
+                        // Handle successful response
+                        // For example, update tracker and log success
+                        audioTranscribeTrackerRepository.UpdateAudioTranscribeTracker(Convert.ToInt32(JobID), clientId, null, (int)JobStatus.Completed, null, null, null, null, null, null, null, null);
+                        objLogger.LogItem("Success response from transcript. Response: " + response + ". Date and time: " + DateTime.Now.ToString(), "BaseThreadClass", "TranscriptionVoiceFileAsync");
+                    }
+                    else
+                    {
+                        // Handle error response
+                        // For example, log error and update tracker
+                        objLogger.LogItem("Error response from transcript. Status code: " + httpResponse.StatusCode + ". Date and time: " + DateTime.Now.ToString() + ". Complete response is ="+httpResponse.ToString(), "BaseThreadClass", "TranscriptionVoiceFileAsync");
+                        audioTranscribeTrackerRepository.UpdateAudioTranscribeTracker(Convert.ToInt32(JobID), clientId, null, (int)JobStatus.PreProcessing, null, null, null, null, null, null, null, null);
+                    }
                 }
             }
             catch (Exception ex)
             {
+                // Handle exceptions
                 objLogger.LogItem("Exception is caught in TranscriptionVoiceFileAsync method for JobID = "+JobID+ " Exception details are "+ex.Message.ToString() +" date and time is "+DateTime.Now.ToString(), "BaseThreadClass", "TranscriptionVoiceFileAsync");
                 audioTranscribeTrackerRepository.UpdateAudioTranscribeTracker(Convert.ToInt32(JobID), clientId, null, (int)JobStatus.PreProcessing, null, null, null, null, null, null, null, null);
             }
 
-
-            if (!((response.Contains("Request failed") || response.Contains("InternalServerError") || response.Contains("\"status\":\"failure\""))))
-            {
-                audioTranscribeTrackerRepository.UpdateAudioTranscribeTracker(Convert.ToInt32(JobID), clientId, null, (int)JobStatus.Completed, null, null, null, null, null, null, null, null);
-                objLogger.LogItem("No error in TranscriptionVoiceFileAsync method for JobID = "+JobID+ " date and time is "+DateTime.Now.ToString(), "BaseThreadClass", "TranscriptionVoiceFileAsync");
-            }
-            else
-            {
-                objLogger.LogItem("API Error is caught in TranscriptionVoiceFileAsync method for JobID = "+JobID+ " date and time is "+DateTime.Now.ToString(), "BaseThreadClass", "TranscriptionVoiceFileAsync");
-                audioTranscribeTrackerRepository.UpdateAudioTranscribeTracker(Convert.ToInt32(JobID), clientId, null, (int)JobStatus.PreProcessing, null, null, null, null, null, null, null, null);
-
-            }
-
+            //if (!((response.Contains("Request failed") || response.Contains("InternalServerError") || response.Contains("\"status\":\"failure\""))))
+            //{
+            //    audioTranscribeTrackerRepository.UpdateAudioTranscribeTracker(Convert.ToInt32(JobID), clientId, null, (int)JobStatus.Completed, null, null, null, null, null, null, null, null);
+            //    objLogger.LogItem("No error in TranscriptionVoiceFileAsync method for JobID = "+JobID+ " date and time is "+DateTime.Now.ToString(), "BaseThreadClass", "TranscriptionVoiceFileAsync");
+            //}
+            //else
+            //{
+            //    objLogger.LogItem("API Error is caught in TranscriptionVoiceFileAsync method for JobID = "+JobID+ " date and time is "+DateTime.Now.ToString(), "BaseThreadClass", "TranscriptionVoiceFileAsync");
+            //    audioTranscribeTrackerRepository.UpdateAudioTranscribeTracker(Convert.ToInt32(JobID), clientId, null, (int)JobStatus.PreProcessing, null, null, null, null, null, null, null, null);
+            //}
         }
     }
 }

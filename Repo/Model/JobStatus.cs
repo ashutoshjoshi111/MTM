@@ -11,6 +11,9 @@
             Starting=7,
             CompletdWithError=8,
             PreProcessing=9,
-            SACompleted = 21
-        }
+            SACompleted = 21,
+            CompletedSC= 22,
+            DuplicateFileName =23,
+            InvalidJob = 24
+    }
 }

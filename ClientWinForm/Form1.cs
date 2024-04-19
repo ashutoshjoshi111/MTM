@@ -7,6 +7,8 @@ using ClientWrapper;
 using System.Windows.Forms;
 using Repo;
 using System.Net.Http;
+using System.Diagnostics;
+using System.Globalization;
 
 namespace ClientWinForm
 {
@@ -81,60 +83,115 @@ namespace ClientWinForm
 
         private void button1_Click(object sender, EventArgs e)
         {
+
+            string command = @"typeperf ""\Processor(_Total)\% Processor Time"" -sc 1";
+            string output = ExecuteCommand(command);
+            float cpuUsage = ParseCpuUsage(output);
+            Console.WriteLine($"CPU Usage: {cpuUsage}%");
+
             //string baseUrl = "http://flm-vm-cogaidev:4091/dump_data_into_sentiment";
             String firstResponse;
 
             string audioFilePath = "C:\\Ashutosh Joshi\\ChatGPT - bkp\\ChatGPT\\ChatGPT\\ChatGPT\\mthreadflask\\Recording\\DMV-85311-MU11_Chunk_6.wav"; // Provide the path to your audio file
                                                                                                                                                         //string transcript =  TranscribeAudio(audioFilePath).Result;
 
+            string mp3FilePath = "C:\\AICogent\\ICFiles"; // Path to the input MP3 file
+            string wavFilePath = "C:\\AICogent\\ICFiles\\Chunk"; // Path to the output WAV file
+
+            FileManagement fileOpx = new FileManagement();
+            fileOpx.CopyFilesToNewFolders(mp3FilePath, wavFilePath);
+
+
+
             //string transcript = TranscribeAudio(audioFilePath).Result;
-            //string transcript = WhisperTranscribeAudio(audioFilePath).Result;
 
 
-            Task.Run(async () => await PerformHttpRequest());
+            //Task.Run(async () => await PerformHttpRequest());
 
-/*
-            using (ApiClient apiConsumer = new ApiClient(baseUrl))
+            /*
+                        using (ApiClient apiConsumer = new ApiClient(baseUrl))
+                        {
+                            apiConsumer.Get(baseUrl, ("clientid", "1"), ("id", "222"));
+                            //apiConsumer.Get(baseUrl, ("audio_file", "DMV-85311-MU11.wav"), ("clientid", "1"));
+                            //firstResponse = apiConsumer.Get(baseUrl, ("audio_file", "DMV-85311-MU11.wav"), ("clientid", "1"));
+                        }
+
+
+                        using (ApiClient apiConsumer = new ApiClient(baseUrl))
+                        {
+                            //apiConsumer.Get(baseUrl, ("clientid", "1"), ("id", "222"));
+                            //apiConsumer.Get(baseUrl, ("audio_file", "DMV-85311-MU11.wav"), ("clientid", "1"));
+                            firstResponse = apiConsumer.Get(baseUrl, ("audio_file", "DMV-85311-MU11.wav"), ("clientid", "1"));
+                        }
+
+                       
+                        ////var targetFormat = new NAudio.Wave.WaveFormat(16000, 16, 1); // Example: 16 kHz sample rate, 16-bit depth, mono
+                        ////var converter = new voiceFileOps();
+
+
+                        //converter.ConvertMp3ToWav(mp3FilePath, wavFilePath, targetFormat);
+
+
+                        int numberOfThreads = 1; // You can configure the number of threads here
+                        for (int i = 0; i < numberOfThreads; i++)
+                        {
+                            Thread thread = new Thread(() =>
+                            {
+                                BaseThreadClass obj = new BaseThreadClass();
+                                obj.runThread();
+                            });
+                            thread.Start();
+                        }
+              */
+
+        }
+
+        private static string ExecuteCommand(string command)
+        {
+            var process = new Process
             {
-                apiConsumer.Get(baseUrl, ("clientid", "1"), ("id", "222"));
-                //apiConsumer.Get(baseUrl, ("audio_file", "DMV-85311-MU11.wav"), ("clientid", "1"));
-                //firstResponse = apiConsumer.Get(baseUrl, ("audio_file", "DMV-85311-MU11.wav"), ("clientid", "1"));
-            }
-
-
-            using (ApiClient apiConsumer = new ApiClient(baseUrl))
-            {
-                //apiConsumer.Get(baseUrl, ("clientid", "1"), ("id", "222"));
-                //apiConsumer.Get(baseUrl, ("audio_file", "DMV-85311-MU11.wav"), ("clientid", "1"));
-                firstResponse = apiConsumer.Get(baseUrl, ("audio_file", "DMV-85311-MU11.wav"), ("clientid", "1"));
-            }
-
-            ////string mp3FilePath = "C:\\AICogent\\ICFiles"; // Path to the input MP3 file
-            ////string wavFilePath = "C:\\AICogent\\ICFiles\\Chunk"; // Path to the output WAV file
-
-            ////FileManagement fileOpx = new FileManagement();
-            ////fileOpx.CopyFilesToNewFolders(mp3FilePath, wavFilePath);
-
-            ////var targetFormat = new NAudio.Wave.WaveFormat(16000, 16, 1); // Example: 16 kHz sample rate, 16-bit depth, mono
-            ////var converter = new voiceFileOps();
-
-
-            //converter.ConvertMp3ToWav(mp3FilePath, wavFilePath, targetFormat);
-
-
-            int numberOfThreads = 1; // You can configure the number of threads here
-            for (int i = 0; i < numberOfThreads; i++)
-            {
-                Thread thread = new Thread(() =>
+                StartInfo = new ProcessStartInfo
                 {
-                    BaseThreadClass obj = new BaseThreadClass();
-                    obj.runThread();
-                });
-                thread.Start();
-            }
-  */
+                    FileName = "cmd.exe",
+                    Arguments = $"/c {command}",
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                }
+            };
 
+            process.Start();
+            string output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit();
+            return output;
+        }
+
+        private static float ParseCpuUsage(string output)
+        {
+            // Split the output into lines.
+            string[] lines = output.Split('\n');
+
+            // The CPU usage value is expected on the second line (index 1) after the header.
+            if (lines.Length > 1)
+            {
+                string dataLine = lines[2]; // Get the second line where the data resides.
+                string[] parts = dataLine.Split(',');
+
+                if (parts.Length > 1) // Ensure there's at least two elements (date and value)
+                {
+                    string cpuUsageString = parts[1].Trim('"'); // Trim quotes if present around the CPU usage value.
+                    cpuUsageString = cpuUsageString.Replace(@"""","");
+
+                    if (float.TryParse(cpuUsageString, NumberStyles.Any, CultureInfo.InvariantCulture, out float cpuUsage))
+                    {
+                        return cpuUsage;
+                    }
+                }
             }
+
+            return -1; // Return -1 if parsing fails.
+        }
+
 
         private void Form1_Load(object sender, EventArgs e)
         {

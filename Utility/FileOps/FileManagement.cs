@@ -8,6 +8,9 @@ using NAudio.Wave;
 using Repo;
 using System.Configuration;
 using Logger;
+using System.Security.Cryptography;
+using Microsoft.Extensions.Logging;
+using Microsoft.Identity.Client;
 
 namespace Utility.FileOps
 {
@@ -23,88 +26,104 @@ namespace Utility.FileOps
         string FinalDirectory = ConfigurationManager.AppSettings["Done"].ToString();
         Logger.Logger objLogger = new Logger.Logger(ConfigurationManager.AppSettings["LogFile"].ToString());
 
+        private string agentId, caseId, discussionType, date, uniqueKey;
+
         public void CopyFilesToNewFolders(string sourceDirectoryPath, string destinationFolderPath)
         {
 
             if (Directory.Exists(sourceDirectoryPath))
-            {               
+            {
+               
                 string[] sourceFiles = Directory.GetFiles(sourceDirectoryPath);
 
-                foreach (string sourceFilePath in sourceFiles)
+                // Filter only .mp3 and .wav files
+                string[] filteredFiles = sourceFiles.Where(file =>
+                    Path.GetExtension(file).Equals(".mp3", StringComparison.OrdinalIgnoreCase) ||
+                    Path.GetExtension(file).Equals(".wav", StringComparison.OrdinalIgnoreCase)).ToArray();
+
+
+                foreach (string sourceFilePath in filteredFiles)
                 {
-                    string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(sourceFilePath);
-                    string newFolderPath = Path.Combine(destinationFolderPath, fileNameWithoutExtension);
-                    Directory.CreateDirectory(newFolderPath);
-                    
-                    string destinationFilePath = Path.Combine(newFolderPath, Path.GetFileName(sourceFilePath));
-                    File.Copy(sourceFilePath, destinationFilePath, true);
-                    //Console.WriteLine($"File '{Path.GetFileName(sourceFilePath)}' copied successfully to '{newFolderPath}'.");
-                    objLogger.LogItem($"File '{Path.GetFileName(sourceFilePath)}' copied successfully to '{newFolderPath}'." ,"FileManagement", "CopyFilesToNewFoldres");
+                    if (!HandleAudioFileNameExistence(sourceFilePath))
+                    {
+                        string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(sourceFilePath);
+                        string newFolderPath = Path.Combine(destinationFolderPath, fileNameWithoutExtension);
+                        Directory.CreateDirectory(newFolderPath);
+
+                        string destinationFilePath = Path.Combine(newFolderPath, Path.GetFileName(sourceFilePath));
+                        File.Copy(sourceFilePath, destinationFilePath, true);
+                        //Console.WriteLine($"File '{Path.GetFileName(sourceFilePath)}' copied successfully to '{newFolderPath}'.");
+                        objLogger.LogItem($"File '{Path.GetFileName(sourceFilePath)}' copied successfully to '{newFolderPath}'.", "FileManagement", "CopyFilesToNewFoldres");
 
 
-                    //Convert type of the file if necessery
-                    var targetFormat = new WaveFormat(16000, 16, 1); // Example: 16 kHz sample rate, 16-bit depth, mono
-                    ConvertMp3ToWavIfNecessary(newFolderPath, targetFormat);
+                        //Convert type of the file if necessery
+                        var targetFormat = new WaveFormat(16000, 16, 1); // Example: 16 kHz sample rate, 16-bit depth, mono
+                        ConvertMp3ToWavIfNecessary(newFolderPath, targetFormat);
 
-                    var wavFile = (Path.GetFileName(sourceFilePath)).Replace("mp3", "wav");
-                    
-                    audioTransRepository.InsertAudioTranscribe(clientId, (int)JobStatus.PreProcessing,(int)FileType.wav, wavFile, sourceFilePath, null, null, null);
+                        var wavFile = (Path.GetFileName(sourceFilePath)).Replace("mp3", "wav");
 
-                    TimeSpan duration;
-                    string WavDestFilePath = Path.Combine(newFolderPath, Path.GetFileName(fileNameWithoutExtension+".wav"));
+                        PopulateOrgDetails(clientId, wavFile);                        
 
+                        //Insert the details in the database
+                        audioTransRepository.InsertAudioTranscribe(clientId, (int)JobStatus.PreProcessing, (int)FileType.wav, wavFile, sourceFilePath, null, null, null, agentId, caseId, false, 0, true, false);
 
-                    // Check if file size exceeds 5 MB and chunk if necessary                   
-                    try
-                    {                        
+                        TimeSpan duration;
+                        string WavDestFilePath = Path.Combine(newFolderPath, Path.GetFileName(fileNameWithoutExtension+".wav"));
 
-                        using (var reader = new WaveFileReader(WavDestFilePath))
+                        // Check if file size exceeds 5 MB and chunk if necessary                   
+                        try
                         {
-                             duration = reader.TotalTime;                            
-                        }          
-                        
-                    }
-                    catch (Exception ex)
-                    {
-                        throw ex;
-                    }
 
-                    // Check if the duration is greater than 5 minutes
-                    if (duration.TotalMinutes > 5)
-                    {
-                        objLogger.LogItem("Audio duration is more than 5 minutes. Chunking needed for - " + sourceFilePath + " Destination Folder = "+FinalDirectory, "FileManagement", "CopyFilesToNewFoldres");
-                        // Invoke chunking logic
-                        ChunkWavFile(WavDestFilePath, 300000);
-                    }
-                    else
-                    {
-                        int parentFileId = 0;
+                            using (var reader = new WaveFileReader(WavDestFilePath))
+                            {
+                                duration = reader.TotalTime;
+                            }
 
-                        AudioTranscribe transcription = audioTransRepository.GetAudioTranscribeDetails(clientId, wavFile);
-
-                        if (transcription != null)
-                        {
-                            parentFileId = transcription.Id;
-                            //Console.WriteLine($"Transcription ID: {transcription.Id}, Audio File Name: {transcription.AudioFileName}");
                         }
-                        objLogger.LogItem("Inserting in table AudioTranscribeTracker for Parent FileID =" + parentFileId + ". The file name is  = "+Path.GetFileName(sourceFilePath), "FileManagement", "CopyFilesToNewFoldres");
+                        catch (Exception ex)
+                        {
+                            throw ex;
+                        }
 
-                        audioTranscribeTrackerRepository.InsertAudioTranscribeTracker(clientId, parentFileId, (int)JobStatus.PreProcessing, (int)FileType.wav, wavFile, 1, null, destinationFilePath.Replace("mp3","wav"), null, null, null);
-                        objLogger.LogItem("Audio duration is less than 5 minutes. No chunking needed for - " + sourceFilePath + " Destination Folder = "+FinalDirectory, "FileManagement", "CopyFilesToNewFoldres");
-                    }
+                        // Check if the duration is greater than 5 minutes
+                        if (duration.TotalMinutes > 5)
+                        {
+                            objLogger.LogItem("Audio duration is more than 5 minutes. Chunking needed for - " + sourceFilePath + " Destination Folder = "+FinalDirectory, "FileManagement", "CopyFilesToNewFoldres");
+                            // Invoke chunking logic
+                            ChunkWavFile(WavDestFilePath, 300000);
+                        }
+                        else
+                        {
+                            int parentFileId = 0;
 
-                    objLogger.LogItem("Inserting in table JobQueue for file = " + wavFile , "FileManagement", "CopyFilesToNewFolders");
+                            AudioTranscribe transcription = audioTransRepository.GetAudioTranscribeDetails(clientId, wavFile);
 
-                    jobQueueRepository.InsertJobQueue(wavFile, null, null, (int)JobSteps.PreStart, (int)JobStatus.PreProcessing);
+                            if (transcription != null)
+                            {
+                                parentFileId = transcription.Id;
+                                //Console.WriteLine($"Transcription ID: {transcription.Id}, Audio File Name: {transcription.AudioFileName}");
+                            }
+                            objLogger.LogItem("Inserting in table AudioTranscribeTracker for Parent FileID =" + parentFileId + ". The file name is  = "+Path.GetFileName(sourceFilePath), "FileManagement", "CopyFilesToNewFoldres");
 
-                    objLogger.LogItem("CopyFileToNewFolderMethod sourceFilePath=" + sourceFilePath + " Destination Folder = "+FinalDirectory, "FileManagement", "CopyFilesToNewFoldres");
+                            audioTranscribeTrackerRepository.InsertAudioTranscribeTracker(clientId, parentFileId, (int)JobStatus.PreProcessing, (int)FileType.wav, wavFile, 1, null, destinationFilePath.Replace("mp3", "wav"), null, null, null);
+                            objLogger.LogItem("Audio duration is less than 5 minutes. No chunking needed for - " + sourceFilePath + " Destination Folder = "+FinalDirectory, "FileManagement", "CopyFilesToNewFoldres");
+                        }
 
-                    MoveFile(sourceFilePath,FinalDirectory);
+                        objLogger.LogItem("Inserting in table JobQueue for file = " + wavFile, "FileManagement", "CopyFilesToNewFolders");
+
+                        jobQueueRepository.InsertJobQueue(wavFile, null, null, (int)JobSteps.PreStart, (int)JobStatus.PreProcessing);
+
+                        objLogger.LogItem("CopyFileToNewFolderMethod sourceFilePath=" + sourceFilePath + " Destination Folder = "+FinalDirectory, "FileManagement", "CopyFilesToNewFoldres");
+
+                        MoveFile(sourceFilePath, FinalDirectory);
+                    }                    
                 }
             }
             else
             {
                 Console.WriteLine("Source directory does not exist.");
+                objLogger.LogItem("Source directory does not exist." , "FileManagement", "CopyFilesToNewFoldres");
+
             }
         }
 
@@ -157,9 +176,9 @@ namespace Utility.FileOps
                         }
 
                         Console.WriteLine($"Chunk '{chunkFileName}' (Size: {new FileInfo(chunkFilePath).Length} bytes) created successfully.");
+                        objLogger.LogItem($"Chunk '{chunkFileName}' (Size: {new FileInfo(chunkFilePath).Length} bytes) created successfully.", "FileManagement", "ChunkWavFile");
 
                         audioTranscribeTrackerRepository.InsertAudioTranscribeTracker(clientId, parentFileId, (int)JobStatus.PreProcessing, (int)FileType.wav, chunkFileName, sequence, null, chunkFilePath, null, null, null);
-
                         sequence++;
                     }
                 }
@@ -172,7 +191,10 @@ namespace Utility.FileOps
             {
                 // Log any exceptions
                 Console.WriteLine($"Error occurred: {ex.Message}");
-            }       }
+                objLogger.LogItem($"Error occurred in file chunking: {ex.Message}", "FileManagement", "ChunkWavFile");
+
+            }
+        }
 
 
         public void ConvertMp3ToWavIfNecessary(string folderPath, WaveFormat targetFormat)
@@ -194,15 +216,35 @@ namespace Utility.FileOps
                     string wavFilePath = Path.Combine(Path.GetDirectoryName(audioFile), Path.GetFileNameWithoutExtension(audioFile) + ".wav");
 
                     // Convert MP3 or other voice files to WAV
-                    voiceFileOperatoins.ConvertMp3ToWav(audioFile, wavFilePath, targetFormat);                   
-                    
-                    File.Delete(audioFile);
+
+                    try
+                    {
+                        voiceFileOperatoins.ConvertMp3ToWav(audioFile, wavFilePath, targetFormat);                        
+                    }
+                    catch (Exception ex)
+                    {
+                        objLogger.LogItem("Alert!!! Error in file conversion for "+audioFile, "FileManagement", "ConvertMp3ToWavIfNecessary");
+                        var wavFile = (Path.GetFileName(audioFile)).Replace("mp3", "wav");                       
+                        PopulateOrgDetails(clientId, wavFile);
+                        audioTransRepository.InsertAudioTranscribe(clientId, (int)JobStatus.InvalidJob, (int)FileType.wav, wavFile, audioFile, null, null, null, agentId, caseId, false, 0, true, false);
+                    }
+
+
+                    try
+                    {
+                        File.Delete(audioFile);
+                    }
+                    catch (Exception ex)
+                    {
+                        objLogger.LogItem("Alert!!! Error in file delete for "+audioFile, "FileManagement", "ConvertMp3ToWavIfNecessary");
+                    }
                 }
             }
             catch (Exception ex)
             {
                 // Log any exceptions
                 Console.WriteLine($"Error occurred: {ex.Message}");
+                objLogger.LogItem("High level Alert!!! Error in file format conversion.", "FileManagement", "ConvertMp3ToWavIfNecessary");
             }
         }
 
@@ -256,6 +298,60 @@ namespace Utility.FileOps
             }
         }
 
+        public static string GetValueFromDictionarySafely(string key, Dictionary<string, string> dictionary)
+        {
+            if (dictionary.TryGetValue(key, out var value))
+            {
+                return value ?? ""; // If value is found but is null, return an empty string instead
+            }
+            return ""; // Return an empty string if the key is not found in the dictionary
+        }
+
+        public void PopulateOrgDetails(int clientId, string wavFile)
+        {
+            //Get the details of Organization and Case
+            Dictionary<string, string> components = audioTransRepository.GetFileNameComponents(clientId, wavFile);
+
+            // Using the function to safely get values from the dictionary
+             agentId = GetValueFromDictionarySafely("AgentID", components);
+             caseId = GetValueFromDictionarySafely("CaseID", components);
+             discussionType = GetValueFromDictionarySafely("DiscussionType", components);
+             date = GetValueFromDictionarySafely("Date", components);
+             uniqueKey = GetValueFromDictionarySafely("UniqueKey", components);
+        }
+
+        public bool HandleAudioFileNameExistence(string sourceFilePath)
+        {
+            try
+            {
+                string fileNameWithExtension = Path.GetFileName(sourceFilePath);
+                string invalidDirectoryPath = ConfigurationManager.AppSettings["Invalid"].ToString();
+
+                var wavFile = (Path.GetFileName(sourceFilePath)).Replace("mp3", "wav");
+
+                PopulateOrgDetails(clientId, wavFile);                
+
+                //objLogger.LogItem($"Verifying uniqueness for file: "+fileNameWithExtension.Replace("mp3", "wav"), "FileManagement", "HandleAudioFileNameExistence");
+                objLogger.LogItem($"Verifying uniqueness for file: "+wavFile, "FileManagement", "HandleAudioFileNameExistence");
+                bool exists = audioTransRepository.CheckAudioFileNameExists(fileNameWithExtension.Replace("mp3","wav"));
+
+                if (exists)
+                {
+                    MoveFile(sourceFilePath, invalidDirectoryPath);
+                    objLogger.LogItem($"ALERT!!!!!!Duplicate file: "+fileNameWithExtension.Replace("mp3", "wav"), "FileManagement", "HandleAudioFileNameExistence");
+                    wavFile = wavFile.Replace(".", "_0_0_DUP.");
+                    audioTransRepository.InsertAudioTranscribe(clientId, (int)JobStatus.DuplicateFileName, (int)FileType.wav, wavFile, sourceFilePath, null, null, null, agentId, caseId, false, 0, false, false);
+
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                objLogger.LogItem($"Error in method HandleAudioFileNameExistence for moving file: {ex.Message}", "FileManagement", "HandleAudioFileNameExistence");
+            }
+
+            return false;
+        }
 
     }
 }
