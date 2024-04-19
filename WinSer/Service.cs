@@ -15,6 +15,8 @@ using Microsoft.IdentityModel.Tokens;
 using Repo;
 using ClientWrapper;
 using System.Security.Cryptography;
+using System.Globalization;
+using Utility.MachineOps;
 
 namespace WinSer
 {
@@ -26,6 +28,11 @@ namespace WinSer
 
         readonly static int clientId = Convert.ToInt16(ConfigurationSettings.AppSettings["clientID"].ToString());
         string SATranscriptURL = ConfigurationSettings.AppSettings["SATranscriptURL"].ToString();
+
+        int CpuUtilizationLimit = Convert.ToInt16(ConfigurationManager.AppSettings["CpuUtilizationLimit"]);
+
+
+        MachineOps machineOps;
 
         public Service()
         {
@@ -41,6 +48,16 @@ namespace WinSer
             tmrRunForPendingJobs.Enabled = true;
             tmrRunForChunk.Enabled = true;
             tmrRunForSentiment.Enabled = true;
+            tmrRunForScoreCard.Enabled = true;
+
+            try
+            {
+                audioTranscribeRepository.UpdateJobStatusToPreProcessingInBulk();
+            }
+            catch (Exception ex)
+            {
+                objLogger.LogItem("Exception in UpdateJobStatusToPreProcessingInBulk", "Service", "OnStart");
+            }
         }
 
         protected override void OnStop()
@@ -49,8 +66,18 @@ namespace WinSer
             tmrRunForPendingJobs.Enabled = false;
             tmrRunForChunk.Enabled = false;
             tmrRunForSentiment.Enabled = false;
+            tmrRunForScoreCard.Enabled = false;
+           
+            try 
+            {
+                audioTranscribeRepository.UpdateJobStatusToPreProcessingInBulk();
+            }
+            catch (Exception ex) 
+            {
+                objLogger.LogItem("Exception in UpdateJobStatusToPreProcessingInBulk", "Service", "OnStop");
+            }
+            
             objLogger.LogItem("OnStop-", "Service", "OnStop");
-
         }
 
         private void tmrRunForPendingJobs_Elapsed(object sender, System.Timers.ElapsedEventArgs e)
@@ -94,7 +121,17 @@ namespace WinSer
         {
             try
             {
+                float currentUtilization;
                 objLogger.LogItem("In the begining of tmrRunForChunk_Elapsed-", "Service", "OnStart");
+
+                currentUtilization = MachineOps.getCPUUsage();
+
+                if (currentUtilization > CpuUtilizationLimit)
+                {
+                    objLogger.LogItem("CPU Utilization exceeding the limit in mrRunForChunk job, current utilizatio is "+currentUtilization.ToString(), "Service", "tmrRunForSentiment");
+                    Thread.Sleep(5000);
+                    return;
+                }
 
                 tmrRunForChunk.Enabled = false;
 
@@ -116,7 +153,18 @@ namespace WinSer
         {
             try
             {
+                float currentUtilization;
+
                 objLogger.LogItem("In the begining of tmrRunForSentiment_Elapsed-", "Service", "tmrRunForSentiment");
+
+                currentUtilization = MachineOps.getCPUUsage();
+
+                if (currentUtilization > CpuUtilizationLimit) 
+                {
+                    objLogger.LogItem("CPU Utilization exceeding the limit in setiment analysis job, current utilizatio is "+currentUtilization.ToString(), "Service", "tmrRunForSentiment");
+                    Thread.Sleep(5000);
+                    return;
+                }
 
                 tmrRunForSentiment.Enabled = false;
 
@@ -136,10 +184,15 @@ namespace WinSer
                         int id = result.Id;
                         string audioFileName = result.AudioFileName;
 
-                        objLogger.LogItem($"Running Sentiment job for Id: {id}, AudioFileName: {audioFileName}", "Service", "tmrRunForSentiment");
+                        objLogger.LogItem($"Running Sentiment job for Id: {id}, AudioFileName: {audioFileName} and before retry count increase.", "Service", "tmrRunForSentiment");
+
+                        audioTranscribeRepository.IncreaseRetryCountSAJob(id);
 
                         Task.Run(async () => await SentimentAnalysisAsync(id.ToString(), audioFileName));
-                        Thread.Sleep(5000);
+                        Thread.Sleep(2000);
+
+                        objLogger.LogItem($"After successfully Running Sentiment job for Id: {id}, AudioFileName: {audioFileName}.", "Service", "tmrRunForSentiment");
+
                     }
                 }
             }
@@ -160,6 +213,7 @@ namespace WinSer
             string response = "";
             try
             {
+                
                 using (ApiClient apiConsumer = new ApiClient(SATranscriptURL))
                 {
                     response = await apiConsumer.GetAsync(SATranscriptURL, ("clientid", clientId.ToString()), ("audio_file", FileName));
@@ -182,5 +236,26 @@ namespace WinSer
                 objLogger.LogItem("API error is caught in SentimentAnalysisAsync method for JobID = "+JobID+ " date and time is "+DateTime.Now.ToString(), "BaseThreadClass", "SentimentAnalysisAsync");
             }
         }
+
+
+        private void tmrRunForScoreCard_Elapsed(object sender, System.Timers.ElapsedEventArgs e)
+        {
+            try
+            {
+                objLogger.LogItem("In the begining of tmrRunForScoreCard_Elapsed-", "Service", "tmrRunForSentiment");
+
+                if (MachineOps.getCPUUsage() > CpuUtilizationLimit)
+                {
+                    objLogger.LogItem("CPU Utilization exceeding the limit in setiment analysis job, current utilizatio is "+CpuUtilizationLimit.ToString(), "Service", "tmrRunForSentiment");
+                    Thread.Sleep(5000);
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                objLogger.LogItem("Exception is caught in tmrRunForScoreCard_Elapsed. "+ DateTime.Now.ToString(), "BaseThreadClass", "SentimentAnalysisAsync");
+            }        
+        }
+
     } 
 }

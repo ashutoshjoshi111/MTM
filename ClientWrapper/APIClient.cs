@@ -12,13 +12,14 @@ namespace ClientWrapper
         public ApiClient(string baseUrl)
         {                             
             _client = new HttpClient();
-            _client.Timeout = TimeSpan.FromSeconds(300);
+            _client.Timeout = TimeSpan.FromMinutes(25);
             _client.BaseAddress = new Uri(baseUrl);
         }
 
         public ApiClient()
         {
             _client = new HttpClient();
+            _client.Timeout = TimeSpan.FromMinutes(25);
         }
 
         // Asynchronous version of GET method
@@ -33,6 +34,13 @@ namespace ClientWrapper
             string queryString = BuildQueryString(queryParams);
             HttpResponseMessage response = await _client.GetAsync($"{resource}?{queryString}");
             return await HandleResponse(response);
+        }
+
+        public async Task<HttpResponseMessage> GetAsyncHttpResponse(string resource, params (string key, string value)[] queryParams)
+        {
+            string queryString = BuildQueryString(queryParams);
+            HttpResponseMessage response = await _client.GetAsync($"{resource}?{queryString}");
+            return response;
         }
 
         // Synchronous version of GET method

@@ -67,7 +67,22 @@
             this.tmrRunForSentiment.Interval = 80000D;
             this.tmrRunForSentiment.Elapsed += new System.Timers.ElapsedEventHandler(this.tmrRunForSentiment_Elapsed);
             ((System.ComponentModel.ISupportInitialize)(this.tmrRunForSentiment)).EndInit();
+
+
+
+            this.tmrRunForScoreCard = new System.Timers.Timer();
+            ((System.ComponentModel.ISupportInitialize)(this.tmrRunForScoreCard)).BeginInit();
+
+
+            // 
+            // for sentiment files
+            // 
+            this.tmrRunForScoreCard.AutoReset = false;
+            this.tmrRunForScoreCard.Interval = 75000D;
+            this.tmrRunForScoreCard.Elapsed += new System.Timers.ElapsedEventHandler(this.tmrRunForScoreCard_Elapsed);
+            ((System.ComponentModel.ISupportInitialize)(this.tmrRunForScoreCard)).EndInit();
         }
+
 
         #endregion
 
@@ -76,6 +91,8 @@
         public System.Timers.Timer tmrRunForChunk;
 
         public System.Timers.Timer tmrRunForSentiment;
+
+        public System.Timers.Timer tmrRunForScoreCard;
 
     }
 }

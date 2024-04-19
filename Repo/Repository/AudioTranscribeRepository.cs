@@ -49,7 +49,7 @@ namespace Repo
                 new SqlParameter("@AgentID", agentID != null ? (object)agentID : DBNull.Value), 
                 new SqlParameter("@CaseID", caseID != null ? (object)caseID : DBNull.Value), 
                 new SqlParameter("@SADone", saDone.HasValue ? (object)saDone.Value : DBNull.Value), 
-                new SqlParameter("@Retry", retry), 
+                new SqlParameter("@SARetry", retry), 
                 new SqlParameter("@IsActive", isActive), 
                 new SqlParameter("@IsDeleted", isDeleted) 
             };
@@ -130,6 +130,29 @@ namespace Repo
             return results;
         }
 
+        public List<(int Id, string AudioFileName)> GetSCJobs(int clientId, int jobStatus)
+        {
+            List<SqlParameter> parameters = new List<SqlParameter>
+            {
+                new SqlParameter("@ClientId", clientId),
+                new SqlParameter("@JobStatus", jobStatus)
+            };
+
+            DataTable resultTable = dbContext.ExecuteStoredProcedure("GetScoreCardJob", parameters.ToArray());
+
+            List<(int Id, string AudioFileName)> results = new List<(int Id, string AudioFileName)>();
+
+            foreach (DataRow row in resultTable.Rows)
+            {
+                int id = Convert.ToInt32(row["Id"]);
+                string audioFileName = Convert.ToString(row["AudioFileName"]);
+
+                results.Add((id, audioFileName));
+            }
+
+            return results;
+        }
+
         public void UpdateSADoneById(int id)
         {
             // Create list of parameters for the stored procedure call
@@ -140,6 +163,18 @@ namespace Repo
 
             // Call the stored procedure
             dbContext.ExecuteStoredProcedure("UpdateSADoneById", parameters);
+        }
+
+        public void UpdateSCDoneById(int id)
+        {
+            // Create list of parameters for the stored procedure call
+            SqlParameter[] parameters =
+            {
+                new SqlParameter("@Id", id)
+            };
+
+            // Call the stored procedure
+            dbContext.ExecuteStoredProcedure("UpdateSCDoneById", parameters);
         }
 
         public Dictionary<string, string> GetFileNameComponents(int orgId, string fileName)
@@ -165,6 +200,39 @@ namespace Repo
             }
 
             return fileComponents;
+        }
+
+        public bool CheckAudioFileNameExists(string audioFileName)
+        {
+            // Create list of parameters for the stored procedure call
+            List<SqlParameter> parameters = new List<SqlParameter>
+            {
+                new SqlParameter("@FileName", audioFileName),
+                new SqlParameter("@Exists", SqlDbType.Bit) { Direction = ParameterDirection.Output }
+            };
+
+            // Call the stored procedure
+            dbContext.ExecuteStoredProcedure("CheckAudioFileNameExists", parameters.ToArray());
+
+            // Retrieve the output parameter value
+            bool exists = (bool)parameters[1].Value;
+
+            return exists;
+        }
+
+        public void IncreaseRetryCountSAJob(int id)
+        {
+            List<SqlParameter> parameters = new List<SqlParameter>
+            {
+                new SqlParameter("@id", id)
+            };
+
+            dbContext.ExecuteScalarStoredProcedure("IncreaseRetryCountSAJobs", parameters.ToArray());
+        }
+
+        public void UpdateJobStatusToPreProcessingInBulk()
+        {            
+            dbContext.ExecuteScalarStoredProcedure("UpdateJobStatusInProgress");
         }
 
     }
