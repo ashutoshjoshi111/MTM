@@ -17,6 +17,8 @@ using ClientWrapper;
 using System.Security.Cryptography;
 using System.Globalization;
 using Utility.MachineOps;
+using Azure;
+using Logger.NLog;
 
 namespace WinSer
 {
@@ -31,6 +33,7 @@ namespace WinSer
 
         int CpuUtilizationLimit = Convert.ToInt16(ConfigurationManager.AppSettings["CpuUtilizationLimit"]);
 
+        string scoreCardURL = ConfigurationSettings.AppSettings["ScoreCardURL"].ToString();
 
         MachineOps machineOps;
 
@@ -57,6 +60,8 @@ namespace WinSer
             catch (Exception ex)
             {
                 objLogger.LogItem("Exception in UpdateJobStatusToPreProcessingInBulk", "Service", "OnStart");
+                LoggerService.nLoggerService.LogException("Exception is caught in OnStart for UpdateJobStatusToPreProcessingInBulk ", ex, "ONSTART", (int)JobSteps.WindowServiceRunning);
+
             }
         }
 
@@ -75,6 +80,7 @@ namespace WinSer
             catch (Exception ex) 
             {
                 objLogger.LogItem("Exception in UpdateJobStatusToPreProcessingInBulk", "Service", "OnStop");
+                LoggerService.nLoggerService.LogException("Exception is caught in onStop for UpdateJobStatusToPreProcessingInBulk ", ex, "ONSTOP", (int)JobSteps.WindowServiceStop);
             }
             
             objLogger.LogItem("OnStop-", "Service", "OnStop");
@@ -109,6 +115,7 @@ namespace WinSer
             catch (Exception ex)
             {
                 objLogger.LogItem("Error in Timer Elapse-" + ex.Message, "Service", "Timer Elapse");
+                LoggerService.nLoggerService.LogException("Exception caught during file management operations.", ex, "FileOperation", (int)JobSteps.Transcript);
             }
             finally
             {
@@ -141,6 +148,7 @@ namespace WinSer
             catch (Exception ex)
             {
                 objLogger.LogItem("Error in tmrRunForChunk_Elapsed Elapse-" + ex.Message, "Service", "tmrRunForChunk_Elapsed");
+                LoggerService.nLoggerService.LogException("Exception caught in tmrRunForChunk_Elapsed.", ex, "FileOperation", (int)JobSteps.Chunk);
             }
             finally
             {
@@ -199,41 +207,51 @@ namespace WinSer
             catch (Exception ex)
             {
                 objLogger.LogItem("Error in tmrRunForSentiment_Elapsed Elapse-" + ex.Message, "Service", "tmrRunForChunk_Elapsed");
+                LoggerService.nLoggerService.LogException("Exception caught in tmrRunForSentiment_Elapsed.", ex, "FileOperation", (int)JobSteps.Sentiment);
             }
             finally
             {
                 tmrRunForSentiment.Enabled = true;
             }
-
         }
 
 
         private async Task SentimentAnalysisAsync(string JobID, string FileName)
         {
             string response = "";
+
             try
             {
-                
+                //using (ApiClient apiConsumer = new ApiClient(SATranscriptURL))
+                //{
+                //    response = await apiConsumer.GetAsync(SATranscriptURL, ("clientid", clientId.ToString()), ("audio_file", FileName));
+                //    objLogger.LogItem(" Reponse from SentimentAnalysisAsync is = "+response.ToString()+ " date and time is "+DateTime.Now.ToString(), "Services", "SentimentAnalysisAsync");
+                //}                
+
+                objLogger.LogItem("In the begining of SentimentAnalysisAsync", "Service", "SentimentAnalysisAsync");
+
                 using (ApiClient apiConsumer = new ApiClient(SATranscriptURL))
                 {
-                    response = await apiConsumer.GetAsync(SATranscriptURL, ("clientid", clientId.ToString()), ("audio_file", FileName));
-                    objLogger.LogItem(" Reponse from SentimentAnalysisAsync is = "+response.ToString()+ " date and time is "+DateTime.Now.ToString(), "Services", "SentimentAnalysisAsync");
+                    HttpResponseMessage httpResponse = await apiConsumer.PostAsync(SATranscriptURL, ("clientid", clientId.ToString()), ("audio_file", FileName));
+
+                    response = await httpResponse.Content.ReadAsStringAsync();
+
+                    if (httpResponse.IsSuccessStatusCode)
+                    {
+                        objLogger.LogItem("No error in SentimentAnalysisAsync method for JobID = "+JobID+ " date and time is "+DateTime.Now.ToString(), "services", "SentimentAnalysisAsync");
+                        audioTranscribeRepository.UpdateSADoneById(Convert.ToInt16(JobID));
+                    }
+                    else
+                    {
+                        objLogger.LogItem("Error in SentimentAnalysisAsync method for JobID = "+JobID+ " date and time is "+DateTime.Now.ToString(), "services", "SentimentAnalysisAsync");
+                        LoggerService.nLoggerService.LogError($"Error in SentimentAnalysisAsync method for JobID = "+JobID+ " date and time is "+DateTime.Now.ToString(), FileName, (int)JobSteps.Compliance);
+                    }
                 }
             }
             catch (Exception ex)
             {
                 objLogger.LogItem("Exception is caught in SentimentAnalysisAsync method for JobID = "+JobID+ " Exception details are "+ex.Message.ToString() +" date and time is "+DateTime.Now.ToString(), "services", "SentimentAnalysisAsync");
-            }
-
-
-            if (!((response.Contains("Request failed") || response.Contains("InternalServerError") || response.Contains("\"status\":\"failure\""))))
-            {
-                objLogger.LogItem("No error in SentimentAnalysisAsync method for JobID = "+JobID+ " date and time is "+DateTime.Now.ToString(), "services", "SentimentAnalysisAsync");
-                audioTranscribeRepository.UpdateSADoneById(Convert.ToInt16(JobID));
-            }
-            else
-            {
-                objLogger.LogItem("API error is caught in SentimentAnalysisAsync method for JobID = "+JobID+ " date and time is "+DateTime.Now.ToString(), "BaseThreadClass", "SentimentAnalysisAsync");
+                LoggerService.nLoggerService.LogException("Exception is caught in SentimentAnalysisAsync method for JobID = "+JobID, ex, FileName, (int)JobSteps.Sentiment);
             }
         }
 
@@ -242,19 +260,93 @@ namespace WinSer
         {
             try
             {
+                float currentUtilization;
+
+                string response = "";
+
+                currentUtilization = MachineOps.getCPUUsage();
+
                 objLogger.LogItem("In the begining of tmrRunForScoreCard_Elapsed-", "Service", "tmrRunForSentiment");
 
-                if (MachineOps.getCPUUsage() > CpuUtilizationLimit)
+                if (currentUtilization > CpuUtilizationLimit)
                 {
-                    objLogger.LogItem("CPU Utilization exceeding the limit in setiment analysis job, current utilizatio is "+CpuUtilizationLimit.ToString(), "Service", "tmrRunForSentiment");
+                    objLogger.LogItem("CPU Utilization exceeding the limit in SC job, current utilization  is "+currentUtilization.ToString(), "Service", "tmrRunForScoreCard");
                     Thread.Sleep(5000);
                     return;
+                }
+
+                tmrRunForScoreCard.Enabled = false;
+
+                //Details of completed transcribe jobs
+                List<(int Id, string AudioFileName)> results = audioTranscribeRepository.GetSCJobs(clientId, (int)JobStatus.Completed);
+
+
+                if (results == null || results.Count == 0)
+                {
+                    objLogger.LogItem("No SC job to run.", "Service", "tmrRunForScoreCard");
+                }
+                else
+                {
+                    // Process each row in the results list
+                    foreach (var result in results)
+                    {
+                        int id = result.Id;
+                        string audioFileName = result.AudioFileName;
+
+                        objLogger.LogItem($"Running SC job for Id: {id}, AudioFileName: {audioFileName} and before retry count increase.", "Service", "tmrRunForScoreCard");
+
+                        audioTranscribeRepository.IncreaseRetryCountSCJob(id);
+
+                        Task.Run(async () => await ScoreCardGenerationAsync(id.ToString(), audioFileName));
+                        Thread.Sleep(2000);
+
+                        objLogger.LogItem($"After successfully Running SC job for Id: {id}, AudioFileName: {audioFileName}.", "Service", "tmrRunForScoreCard");
+                        LoggerService.nLoggerService.LogInfo($"After successfully Running SC job for Id: {id}, AudioFileName: {audioFileName}.", audioFileName, (int)JobSteps.Compliance);
+                    }
                 }
             }
             catch (Exception ex)
             {
-                objLogger.LogItem("Exception is caught in tmrRunForScoreCard_Elapsed. "+ DateTime.Now.ToString(), "BaseThreadClass", "SentimentAnalysisAsync");
-            }        
+                objLogger.LogItem("Exception is caught in tmrRunForScoreCard_Elapsed. "+ DateTime.Now.ToString(), "BaseThreadClass", "Compliance");
+                LoggerService.nLoggerService.LogException("Exception is caught in tmrRunForScoreCard_Elapsed ", ex, "COMPLIANCE", (int)JobSteps.Compliance);
+            }
+            finally 
+            {
+                tmrRunForScoreCard.Enabled = true;
+            }
+        }
+
+        private async Task ScoreCardGenerationAsync(string JobID, string FileName)
+        {
+            try
+            {
+                string response = "";
+
+                objLogger.LogItem("In the begining of ScoreCardGenerationAsync", "Service", "ScoreCardGenerationAsync");
+
+                using (ApiClient apiConsumer = new ApiClient(scoreCardURL))
+                {
+                    HttpResponseMessage httpResponse = await apiConsumer.PostAsync(scoreCardURL, ("clientid", clientId.ToString()), ("audio_file", FileName));
+
+                    response = await httpResponse.Content.ReadAsStringAsync();
+
+                    if (httpResponse.IsSuccessStatusCode)
+                    {
+                        objLogger.LogItem("No error in ScoreCardGenerationAsync method for JobID = "+JobID+ " date and time is "+DateTime.Now.ToString(), "services", "ScoreCardGenerationAsync");
+                        audioTranscribeRepository.UpdateSCDoneById(Convert.ToInt16(JobID));
+                    }
+                    else 
+                    {
+                        objLogger.LogItem("Error in ScoreCardGenerationAsync method for JobID = "+JobID+ " date and time is "+DateTime.Now.ToString(), "services", "ScoreCardGenerationAsync");
+                        LoggerService.nLoggerService.LogError($"Error in ScoreCardGenerationAsync method for JobID = "+JobID+ " date and time is "+DateTime.Now.ToString(), FileName, (int)JobSteps.Compliance);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                objLogger.LogItem("Exception is caught in ScoreCardGenerationAsync. "+ DateTime.Now.ToString(), "BaseThreadClass", "ScoreCardGenerationAsync");
+                LoggerService.nLoggerService.LogException("Exception is caught in ScoreCardGenerationAsync. "+ DateTime.Now.ToString(), ex, "COMPLIANCE", (int)JobSteps.Compliance);
+            }
         }
 
     } 
