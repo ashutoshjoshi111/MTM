@@ -43,6 +43,13 @@ namespace ClientWrapper
             return response;
         }
 
+        public async Task<HttpResponseMessage> PostAsync(string resource, params (string key, string value)[] queryParams)
+        {
+            string queryString = BuildQueryString(queryParams);
+            HttpResponseMessage response = await _client.PostAsync($"{resource}?{queryString}", null);
+            return response;
+        }
+
         // Synchronous version of GET method
         public string GetFromURL(string resource)
         {

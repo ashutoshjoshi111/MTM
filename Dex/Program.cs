@@ -13,8 +13,8 @@ class Program
         string wavFilePath = "C:\\AICogent\\ICFiles\\Chunk"; // Path to the output WAV file
 
 
-        //FileManagement fileOpx = new FileManagement();
-        //fileOpx.CopyFilesToNewFolders(mp3FilePath, wavFilePath);
+        FileManagement fileOpx = new FileManagement();
+        fileOpx.CopyFilesToNewFolders(mp3FilePath, wavFilePath);
 
         //var targetFormat = new WaveFormat(16000, 16, 1); // Example: 16 kHz sample rate, 16-bit depth, mono
         //var converter = new voiceFileOps();

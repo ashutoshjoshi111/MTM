@@ -324,7 +324,7 @@ namespace MTS
 
                     audioTranscribeTrackerRepository.IncreaseRetryCountAudioTranscribeTracker(Convert.ToInt32(JobID));
 
-                    HttpResponseMessage httpResponse = await apiConsumer.GetAsyncHttpResponse(transcriptionAudioURL, ("clientid", clientId.ToString()), ("id", JobID));
+                    HttpResponseMessage httpResponse = await apiConsumer.PostAsync(transcriptionAudioURL, ("clientid", clientId.ToString()), ("id", JobID));
 
                      response = await httpResponse.Content.ReadAsStringAsync();
 

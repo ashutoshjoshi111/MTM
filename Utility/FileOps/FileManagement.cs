@@ -8,6 +8,7 @@ using NAudio.Wave;
 using Repo;
 using System.Configuration;
 using Logger;
+using Logger.NLog;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using Microsoft.Identity.Client;
@@ -25,6 +26,7 @@ namespace Utility.FileOps
         Int16 clientId = Convert.ToInt16(ConfigurationManager.AppSettings["clientID"].ToString());
         string FinalDirectory = ConfigurationManager.AppSettings["Done"].ToString();
         Logger.Logger objLogger = new Logger.Logger(ConfigurationManager.AppSettings["LogFile"].ToString());
+       
 
         private string agentId, caseId, discussionType, date, uniqueKey;
 
@@ -54,7 +56,8 @@ namespace Utility.FileOps
                         File.Copy(sourceFilePath, destinationFilePath, true);
                         //Console.WriteLine($"File '{Path.GetFileName(sourceFilePath)}' copied successfully to '{newFolderPath}'.");
                         objLogger.LogItem($"File '{Path.GetFileName(sourceFilePath)}' copied successfully to '{newFolderPath}'.", "FileManagement", "CopyFilesToNewFoldres");
-
+                       
+                        LoggerService.nLoggerService.LogInfo($"File '{Path.GetFileName(sourceFilePath)}' copied successfully to '{newFolderPath}'.", Path.GetFileName(sourceFilePath), (int)JobSteps.PreStart);
 
                         //Convert type of the file if necessery
                         var targetFormat = new WaveFormat(16000, 16, 1); // Example: 16 kHz sample rate, 16-bit depth, mono
@@ -67,6 +70,8 @@ namespace Utility.FileOps
                         //Insert the details in the database
                         audioTransRepository.InsertAudioTranscribe(clientId, (int)JobStatus.PreProcessing, (int)FileType.wav, wavFile, sourceFilePath, null, null, null, agentId, caseId, false, 0, true, false);
 
+                        LoggerService.nLoggerService.LogInfo(wavFile +" Details are inserted into database.", wavFile, (int)JobSteps.PreStart);
+                        
                         TimeSpan duration;
                         string WavDestFilePath = Path.Combine(newFolderPath, Path.GetFileName(fileNameWithoutExtension+".wav"));
 
@@ -109,14 +114,15 @@ namespace Utility.FileOps
                             objLogger.LogItem("Audio duration is less than 5 minutes. No chunking needed for - " + sourceFilePath + " Destination Folder = "+FinalDirectory, "FileManagement", "CopyFilesToNewFoldres");
                         }
 
-                        objLogger.LogItem("Inserting in table JobQueue for file = " + wavFile, "FileManagement", "CopyFilesToNewFolders");
-
-                        jobQueueRepository.InsertJobQueue(wavFile, null, null, (int)JobSteps.PreStart, (int)JobStatus.PreProcessing);
-
-                        objLogger.LogItem("CopyFileToNewFolderMethod sourceFilePath=" + sourceFilePath + " Destination Folder = "+FinalDirectory, "FileManagement", "CopyFilesToNewFoldres");
+                        //objLogger.LogItem("Inserting in table JobQueue for file = " + wavFile, "FileManagement", "CopyFilesToNewFolders");
+                        //jobQueueRepository.InsertJobQueue(wavFile, null, null, (int)JobSteps.PreStart, (int)JobStatus.PreProcessing);
+                        //objLogger.LogItem("CopyFileToNewFolderMethod sourceFilePath=" + sourceFilePath + " Destination Folder = "+FinalDirectory, "FileManagement", "CopyFilesToNewFoldres");
 
                         MoveFile(sourceFilePath, FinalDirectory);
-                    }                    
+
+                        LoggerService.nLoggerService.LogInfo(wavFile +" the orignal mp3/wav file is moved final directory.", wavFile, (int)JobSteps.PreStart);
+
+                    }
                 }
             }
             else
@@ -175,8 +181,8 @@ namespace Utility.FileOps
                             }
                         }
 
-                        Console.WriteLine($"Chunk '{chunkFileName}' (Size: {new FileInfo(chunkFilePath).Length} bytes) created successfully.");
                         objLogger.LogItem($"Chunk '{chunkFileName}' (Size: {new FileInfo(chunkFilePath).Length} bytes) created successfully.", "FileManagement", "ChunkWavFile");
+                        LoggerService.nLoggerService.LogInfo($"Chunk '{chunkFileName}' (Size: {new FileInfo(chunkFilePath).Length} bytes) created successfully.", chunkFileName, (int)JobSteps.Chunk);
 
                         audioTranscribeTrackerRepository.InsertAudioTranscribeTracker(clientId, parentFileId, (int)JobStatus.PreProcessing, (int)FileType.wav, chunkFileName, sequence, null, chunkFilePath, null, null, null);
                         sequence++;
@@ -184,15 +190,15 @@ namespace Utility.FileOps
                 }
                 // No exceptions occurred, delete the original file
                 File.Delete(filePath);
-
-                Console.WriteLine("Original file deleted.");
+                LoggerService.nLoggerService.LogInfo($"After chunking, Orignal file is deleted successfully.", Path.GetFileName(filePath), (int)JobSteps.Chunk);
+                
             }
             catch (Exception ex)
             {
                 // Log any exceptions
                 Console.WriteLine($"Error occurred: {ex.Message}");
                 objLogger.LogItem($"Error occurred in file chunking: {ex.Message}", "FileManagement", "ChunkWavFile");
-
+                LoggerService.nLoggerService.LogException("Error occurred in file chunking", ex, Path.GetFileName(filePath), (int)JobSteps.Chunk);
             }
         }
 
@@ -208,8 +214,8 @@ namespace Utility.FileOps
                 {
                     // Check if the file is already in WAV format
                     if (Path.GetExtension(audioFile).Equals(".wav", StringComparison.OrdinalIgnoreCase))
-                    {
-                        Console.WriteLine($"{Path.GetFileName(audioFile)} is already in WAV format. Skipping conversion.");
+                    {                       
+                        objLogger.LogItem($"{Path.GetFileName(audioFile)} is already in WAV format. Skipping conversion.", "FileManagement", "ConvertMp3ToWavIfNecessary");
                         continue;
                     }
 
@@ -224,27 +230,34 @@ namespace Utility.FileOps
                     catch (Exception ex)
                     {
                         objLogger.LogItem("Alert!!! Error in file conversion for "+audioFile, "FileManagement", "ConvertMp3ToWavIfNecessary");
+                        
                         var wavFile = (Path.GetFileName(audioFile)).Replace("mp3", "wav");                       
                         PopulateOrgDetails(clientId, wavFile);
                         audioTransRepository.InsertAudioTranscribe(clientId, (int)JobStatus.InvalidJob, (int)FileType.wav, wavFile, audioFile, null, null, null, agentId, caseId, false, 0, true, false);
+                        
+                        LoggerService.nLoggerService.LogException("Error occurred in file convesion", ex, audioFile, (int)JobSteps.FileConversion);
                     }
 
 
                     try
                     {
                         File.Delete(audioFile);
+                        LoggerService.nLoggerService.LogInfo($"After Conversion, Orignal file is deleted successfully.", audioFile, (int)JobSteps.Chunk);
+
                     }
                     catch (Exception ex)
                     {
                         objLogger.LogItem("Alert!!! Error in file delete for "+audioFile, "FileManagement", "ConvertMp3ToWavIfNecessary");
+                        LoggerService.nLoggerService.LogException("Error occurred in file chunking", ex, Path.GetFileName(audioFile).Replace("mp3", "wav"), (int)JobSteps.FileConversion);
+
                     }
                 }
             }
             catch (Exception ex)
             {
-                // Log any exceptions
-                Console.WriteLine($"Error occurred: {ex.Message}");
-                objLogger.LogItem("High level Alert!!! Error in file format conversion.", "FileManagement", "ConvertMp3ToWavIfNecessary");
+                // Log any exceptions                
+                objLogger.LogItem("High level Alert!!! Error in file format conversion."+ex.Message.ToString(), "FileManagement", "ConvertMp3ToWavIfNecessary");
+                LoggerService.nLoggerService.LogException("High level Alert!!! Error in file format conversion."+ex.Message.ToString(), ex, "FILE-TYPE-CONVERSION", (int)JobSteps.FileConversion);
             }
         }
 
@@ -281,6 +294,7 @@ namespace Utility.FileOps
                 {
                     objLogger.LogItem("File alrady exists deleting the same name file.....", "FileManagement", "MoveFile");                    
                     File.Delete(destinationFilePath);
+
                     objLogger.LogItem("Deleted the same name file.....", "FileManagement", "MoveFile");
 
                 }

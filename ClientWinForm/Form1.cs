@@ -9,6 +9,8 @@ using Repo;
 using System.Net.Http;
 using System.Diagnostics;
 using System.Globalization;
+using Logger.NLog;
+
 
 namespace ClientWinForm
 {
@@ -83,6 +85,23 @@ namespace ClientWinForm
 
         private void button1_Click(object sender, EventArgs e)
         {
+
+
+            //LoggerService logger = new LoggerService();
+
+
+            LoggerService.nLoggerService.LogInfo($"File testing.", "", (int)JobSteps.PreStart);
+
+
+            //logger.LogInfo("This is an informational message", KeyId: "Value1", Step: 123);
+
+            //logger.LogInfo("This is an informational message");
+
+            //logger.LogWarn("This is a warning message");
+            //logger.LogError("This is an error message");
+            
+
+
 
             string command = @"typeperf ""\Processor(_Total)\% Processor Time"" -sc 1";
             string output = ExecuteCommand(command);

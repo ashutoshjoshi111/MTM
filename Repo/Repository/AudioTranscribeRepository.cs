@@ -230,6 +230,16 @@ namespace Repo
             dbContext.ExecuteScalarStoredProcedure("IncreaseRetryCountSAJobs", parameters.ToArray());
         }
 
+        public void IncreaseRetryCountSCJob(int id)
+        {
+            List<SqlParameter> parameters = new List<SqlParameter>
+            {
+                new SqlParameter("@id", id)
+            };
+
+            dbContext.ExecuteScalarStoredProcedure("IncreaseRetryCountSCJobs", parameters.ToArray());
+        }
+
         public void UpdateJobStatusToPreProcessingInBulk()
         {            
             dbContext.ExecuteScalarStoredProcedure("UpdateJobStatusInProgress");
