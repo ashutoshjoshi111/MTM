@@ -36,7 +36,7 @@
             // tmrRunForPendingJobs
             // 
             this.tmrRunForPendingJobs.AutoReset = false;
-            this.tmrRunForPendingJobs.Interval = 60000D;
+            this.tmrRunForPendingJobs.Interval = 10000D;
             this.tmrRunForPendingJobs.Elapsed += new System.Timers.ElapsedEventHandler(this.tmrRunForPendingJobs_Elapsed);
             // 
             // Service
@@ -52,7 +52,7 @@
             // for chunk of voice files
             // 
             this.tmrRunForChunk.AutoReset = false;
-            this.tmrRunForChunk.Interval = 61000D;
+            this.tmrRunForChunk.Interval = 15000D;
             this.tmrRunForChunk.Elapsed += new System.Timers.ElapsedEventHandler(this.tmrRunForChunk_Elapsed);
             ((System.ComponentModel.ISupportInitialize)(this.tmrRunForChunk)).EndInit();
 
@@ -64,7 +64,7 @@
             // for sentiment files
             // 
             this.tmrRunForSentiment.AutoReset = false;
-            this.tmrRunForSentiment.Interval = 80000D;
+            this.tmrRunForSentiment.Interval = 25000D;
             this.tmrRunForSentiment.Elapsed += new System.Timers.ElapsedEventHandler(this.tmrRunForSentiment_Elapsed);
             ((System.ComponentModel.ISupportInitialize)(this.tmrRunForSentiment)).EndInit();
 
@@ -78,7 +78,7 @@
             // for sentiment files
             // 
             this.tmrRunForScoreCard.AutoReset = false;
-            this.tmrRunForScoreCard.Interval = 75000D;
+            this.tmrRunForScoreCard.Interval = 35000D;
             this.tmrRunForScoreCard.Elapsed += new System.Timers.ElapsedEventHandler(this.tmrRunForScoreCard_Elapsed);
             ((System.ComponentModel.ISupportInitialize)(this.tmrRunForScoreCard)).EndInit();
         }
