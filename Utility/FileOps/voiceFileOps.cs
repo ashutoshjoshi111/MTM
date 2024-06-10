@@ -12,6 +12,8 @@ namespace Utility.FileOps
         public void ConvertMp3ToWav(string mp3FilePath, string wavFilePath, WaveFormat targetFormat)
         {
             // Adjust encoding parameters
+            
+
             using (var mp3Reader = new Mp3FileReader(mp3FilePath))
             {
                 var pcmStream = new WaveFormatConversionStream(targetFormat, mp3Reader);
@@ -19,5 +21,25 @@ namespace Utility.FileOps
             }
 
         }
+
+        static void ConvertMp4ToWav(string inputFilePath, string outputFilePath)
+        {
+            try
+            {                
+
+                using (var reader = new MediaFoundationReader(inputFilePath))
+                {
+                    WaveFileWriter.CreateWaveFile(outputFilePath, reader);
+                }
+
+                Console.WriteLine("Conversion completed successfully!");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error converting file: " + ex.Message);
+            }
+        }
+
+
     }
 }

@@ -28,7 +28,7 @@ namespace Utility.FileOps
         Logger.Logger objLogger = new Logger.Logger(ConfigurationManager.AppSettings["LogFile"].ToString());
        
 
-        private string agentId, caseId, discussionType, date, uniqueKey;
+        private string agentId, caseId, discussionType, dateOfDiscussion, uniqueKey;
 
         public void CopyFilesToNewFolders(string sourceDirectoryPath, string destinationFolderPath)
         {
@@ -68,7 +68,7 @@ namespace Utility.FileOps
                         PopulateOrgDetails(clientId, wavFile);                        
 
                         //Insert the details in the database
-                        audioTransRepository.InsertAudioTranscribe(clientId, (int)JobStatus.PreProcessing, (int)FileType.wav, wavFile, sourceFilePath, null, null, null, agentId, caseId, false, 0, true, false);
+                        audioTransRepository.InsertAudioTranscribe(clientId, (int)JobStatus.PreProcessing, (int)FileType.wav, wavFile, sourceFilePath, null, null, null, agentId, caseId,discussionType, dateOfDiscussion, uniqueKey, false, 0, true, false);
 
                         LoggerService.nLoggerService.LogInfo(wavFile +" Details are inserted into database.", wavFile, (int)JobSteps.PreStart);
                         
@@ -233,7 +233,7 @@ namespace Utility.FileOps
                         
                         var wavFile = (Path.GetFileName(audioFile)).Replace("mp3", "wav");                       
                         PopulateOrgDetails(clientId, wavFile);
-                        audioTransRepository.InsertAudioTranscribe(clientId, (int)JobStatus.InvalidJob, (int)FileType.wav, wavFile, audioFile, null, null, null, agentId, caseId, false, 0, true, false);
+                        audioTransRepository.InsertAudioTranscribe(clientId, (int)JobStatus.InvalidJob, (int)FileType.wav, wavFile, audioFile, null, null, null, agentId, caseId,discussionType,dateOfDiscussion,uniqueKey, false, 0, true, false);
                         
                         LoggerService.nLoggerService.LogException("Error occurred in file convesion", ex, audioFile, (int)JobSteps.FileConversion);
                     }
@@ -330,7 +330,7 @@ namespace Utility.FileOps
              agentId = GetValueFromDictionarySafely("AgentID", components);
              caseId = GetValueFromDictionarySafely("CaseID", components);
              discussionType = GetValueFromDictionarySafely("DiscussionType", components);
-             date = GetValueFromDictionarySafely("Date", components);
+             dateOfDiscussion = GetValueFromDictionarySafely("Date", components);
              uniqueKey = GetValueFromDictionarySafely("UniqueKey", components);
         }
 
@@ -354,7 +354,7 @@ namespace Utility.FileOps
                     MoveFile(sourceFilePath, invalidDirectoryPath);
                     objLogger.LogItem($"ALERT!!!!!!Duplicate file: "+fileNameWithExtension.Replace("mp3", "wav"), "FileManagement", "HandleAudioFileNameExistence");
                     wavFile = wavFile.Replace(".", "_0_0_DUP.");
-                    audioTransRepository.InsertAudioTranscribe(clientId, (int)JobStatus.DuplicateFileName, (int)FileType.wav, wavFile, sourceFilePath, null, null, null, agentId, caseId, false, 0, false, false);
+                    audioTransRepository.InsertAudioTranscribe(clientId, (int)JobStatus.DuplicateFileName, (int)FileType.wav, wavFile, sourceFilePath, null, null, null, agentId, caseId, discussionType, dateOfDiscussion, uniqueKey, false, 0, false, false);
 
                     return true;
                 }

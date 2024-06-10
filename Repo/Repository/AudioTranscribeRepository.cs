@@ -30,6 +30,9 @@ namespace Repo
     DateTime? transcribeDate = null,
     string agentID = null, // New parameter
     string caseID = null, // New parameter
+    string DiscussionType = null, // New parameter
+    string DateOfDiscussion = null, // New parameter
+    string UniqueKey = null, // New parameter
     bool? saDone = null, // New parameter
     int retry = 0, // New parameter with a default value
     bool isActive = true, // New parameter with a default value
@@ -47,7 +50,10 @@ namespace Repo
                 new SqlParameter("@TranscribeEndTime", transcribeEndTime.HasValue ? (object)transcribeEndTime.Value : DBNull.Value),
                 new SqlParameter("@TranscribeDate", transcribeDate.HasValue ? (object)transcribeDate.Value : DBNull.Value),
                 new SqlParameter("@AgentID", agentID != null ? (object)agentID : DBNull.Value), 
-                new SqlParameter("@CaseID", caseID != null ? (object)caseID : DBNull.Value), 
+                new SqlParameter("@CaseID", caseID != null ? (object)caseID : DBNull.Value),
+                new SqlParameter("@DiscussionType", DiscussionType != null ? (object)DiscussionType : DBNull.Value),
+                new SqlParameter("@DateOfDiscussion", DateOfDiscussion != null ? (object)DateOfDiscussion : DBNull.Value),
+                new SqlParameter("@UniqueKey", UniqueKey != null ? (object)UniqueKey : DBNull.Value),
                 new SqlParameter("@SADone", saDone.HasValue ? (object)saDone.Value : DBNull.Value), 
                 new SqlParameter("@SARetry", retry), 
                 new SqlParameter("@IsActive", isActive), 
